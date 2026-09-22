@@ -407,39 +407,29 @@ impl ScalingEngine for ThresholdEngine {
             | AppliedOutcome::Blocked { .. }
             | AppliedOutcome::Failed { .. } => return,
         };
+
+        let validation_threshold = match action {
+            ScaleAction::Up(_) => self.cfg.scale_up_min_gain,
+            ScaleAction::Down(_) => self.cfg.scale_down_revert_drop,
+            ScaleAction::None | ScaleAction::Revert(_) => return,
+        };
+
+        if validation_threshold == 0.0 {
+            return;
+        }
+
         let mut state = self.state.lock().await;
         let Some(instance_state) = state.get_mut(instance_id) else {
             return;
         };
-        match action {
-            ScaleAction::Up(_) if self.cfg.scale_up_min_gain > 0.0 => {
-                // Reset sustain only after the controller accepted the action;
-                // a merely proposed or blocked downscale must retain the
-                // evidence accumulated by the sustain policy.
-                instance_state.low_util_polls = 0;
-                instance_state.start_validation(
-                    action,
-                    previous_thread_count,
-                    previous_iops,
-                    self.cfg.scale_validation_sample_polls,
-                );
-            }
-            ScaleAction::Down(_) if self.cfg.scale_down_revert_drop > 0.0 => {
-                // Successful actuation consumes the sustained low-utilisation
-                // run; subsequent downscaling must establish a fresh run.
-                instance_state.low_util_polls = 0;
-                instance_state.start_validation(
-                    action,
-                    previous_thread_count,
-                    previous_iops,
-                    self.cfg.scale_validation_sample_polls,
-                );
-            }
-            ScaleAction::Up(_) | ScaleAction::Down(_) => {
-                instance_state.low_util_polls = 0;
-            }
-            ScaleAction::None | ScaleAction::Revert(_) => {}
-        }
+        instance_state.low_util_polls = 0;
+
+        instance_state.start_validation(
+            action,
+            previous_thread_count,
+            previous_iops,
+            self.cfg.scale_validation_sample_polls,
+        );
     }
 
     async fn on_instance_added(&self, instance: &Arc<Instance>) {
