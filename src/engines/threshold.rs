@@ -402,13 +402,10 @@ impl ScalingEngine for ThresholdEngine {
                 action,
                 prev_thread_count,
                 prev_io_count_total,
-            }
-            | AppliedOutcome::DryRun {
-                action,
-                prev_thread_count,
-                prev_io_count_total,
             } => (action, prev_thread_count, prev_io_count_total),
-            AppliedOutcome::Blocked { .. } | AppliedOutcome::Failed { .. } => return,
+            AppliedOutcome::DryRun { .. }
+            | AppliedOutcome::Blocked { .. }
+            | AppliedOutcome::Failed { .. } => return,
         };
         let mut state = self.state.lock().await;
         let Some(instance_state) = state.get_mut(instance_id) else {
